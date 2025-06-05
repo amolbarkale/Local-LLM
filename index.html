@@ -1,0 +1,658 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Rephraser - Local LLM</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #2c3e50 0%, #3498db 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            font-weight: 700;
+        }
+
+        .header p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+
+        .main-content {
+            padding: 40px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+        }
+
+        .input-section, .output-section {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+        }
+
+        .section-title {
+            font-size: 1.3rem;
+            font-weight: 600;
+            margin-bottom: 20px;
+            color: #2c3e50;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .input-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+            color: #555;
+        }
+
+        textarea, select, input[type="range"] {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 1rem;
+            transition: border-color 0.3s ease;
+        }
+
+        textarea {
+            resize: vertical;
+            min-height: 120px;
+            font-family: inherit;
+        }
+
+        textarea:focus, select:focus {
+            outline: none;
+            border-color: #3498db;
+        }
+
+        .temperature-display {
+            text-align: center;
+            margin-top: 5px;
+            font-weight: 600;
+            color: #3498db;
+        }
+
+        .style-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .style-button {
+            padding: 12px 16px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            background: white;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-align: center;
+            font-weight: 500;
+        }
+
+        .style-button:hover {
+            border-color: #3498db;
+            background: #f8f9fa;
+        }
+
+        .style-button.active {
+            background: #3498db;
+            color: white;
+            border-color: #3498db;
+        }
+
+        .rephrase-btn {
+            width: 100%;
+            padding: 15px;
+            background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-top: 20px;
+        }
+
+        .rephrase-btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(52, 152, 219, 0.3);
+        }
+
+        .rephrase-btn:disabled {
+            background: #bdc3c7;
+            cursor: not-allowed;
+        }
+
+        .output-content {
+            min-height: 200px;
+            padding: 20px;
+            border: 2px dashed #e0e0e0;
+            border-radius: 8px;
+            background: #f8f9fa;
+            font-size: 1rem;
+            line-height: 1.6;
+            color: #2c3e50;
+        }
+
+        .output-content.has-content {
+            border-style: solid;
+            border-color: #27ae60;
+            background: white;
+        }
+
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            color: #7f8c8d;
+            font-style: italic;
+        }
+
+        .spinner {
+            width: 20px;
+            height: 20px;
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #3498db;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .control-btn {
+            padding: 8px 16px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            background: white;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: all 0.3s ease;
+        }
+
+        .control-btn:hover {
+            background: #f8f9fa;
+            border-color: #3498db;
+        }
+
+        .logs-section {
+            margin-top: 30px;
+            padding: 25px;
+            background: #2c3e50;
+            color: white;
+            border-radius: 15px;
+            grid-column: 1 / -1;
+        }
+
+        .log-entry {
+            margin-bottom: 15px;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9rem;
+        }
+
+        .log-timestamp {
+            color: #3498db;
+            font-weight: 600;
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 10px;
+        }
+
+        .status-connected {
+            background: #27ae60;
+        }
+
+        .status-disconnected {
+            background: #e74c3c;
+        }
+
+        @media (max-width: 768px) {
+            .main-content {
+                grid-template-columns: 1fr;
+                gap: 20px;
+                padding: 20px;
+            }
+            
+            .header h1 {
+                font-size: 2rem;
+            }
+            
+            .style-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎭 AI Rephraser</h1>
+            <p>Transform your text with different writing styles using local Llama 3.2 3B</p>
+            <div style="margin-top: 15px;">
+                <span class="status-indicator status-disconnected" id="statusIndicator"></span>
+                <span id="statusText">Checking connection...</span>
+            </div>
+        </div>
+
+        <div class="main-content">
+            <div class="input-section">
+                <h2 class="section-title">
+                    ✍️ Input Text
+                </h2>
+                
+                <div class="input-group">
+                    <label for="inputText">Enter text to rephrase:</label>
+                    <textarea 
+                        id="inputText" 
+                        placeholder="Type or paste your text here..."
+                        rows="6"
+                    ></textarea>
+                </div>
+
+                <div class="input-group">
+                    <label>Choose writing style:</label>
+                    <div class="style-grid">
+                        <button class="style-button active" data-style="professional">👔 Professional</button>
+                        <button class="style-button" data-style="casual">😊 Casual</button>
+                        <button class="style-button" data-style="academic">🎓 Academic</button>
+                        <button class="style-button" data-style="creative">🎨 Creative</button>
+                        <button class="style-button" data-style="concise">⚡ Concise</button>
+                        <button class="style-button" data-style="humorous">😄 Humorous</button>
+                    </div>
+                </div>
+
+                <div class="input-group">
+                    <label for="temperature">Creativity Level:</label>
+                    <input 
+                        type="range" 
+                        id="temperature" 
+                        min="0.1" 
+                        max="1.0" 
+                        step="0.1" 
+                        value="0.7"
+                    >
+                    <div class="temperature-display" id="tempDisplay">0.7</div>
+                </div>
+
+                <button class="rephrase-btn" id="rephraseBtn">
+                    🚀 Rephrase Text
+                </button>
+            </div>
+
+            <div class="output-section">
+                <h2 class="section-title">
+                    ✨ Rephrased Output
+                </h2>
+                
+                <div class="output-content" id="outputContent">
+                    <div style="text-align: center; padding: 40px; color: #7f8c8d;">
+                        Your rephrased text will appear here...
+                    </div>
+                </div>
+
+                <div class="controls">
+                    <button class="control-btn" id="copyBtn" style="display: none;">
+                        📋 Copy
+                    </button>
+                    <button class="control-btn" id="clearBtn">
+                        🗑️ Clear
+                    </button>
+                    <button class="control-btn" id="exportBtn" style="display: none;">
+                        💾 Export
+                    </button>
+                </div>
+            </div>
+
+            <div class="logs-section">
+                <h2 class="section-title">
+                    📊 Activity Logs
+                </h2>
+                <div id="logsContainer">
+                    <div class="log-entry">
+                        <span class="log-timestamp">[System]</span> Application initialized. Waiting for user input...
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class AIRephraser {
+            constructor() {
+                this.currentStyle = 'professional';
+                this.temperature = 0.7;
+                this.isConnected = false;
+                this.logs = [];
+                
+                this.initializeElements();
+                this.bindEvents();
+                this.checkOllamaConnection();
+                this.loadLogs();
+            }
+
+            initializeElements() {
+                this.inputText = document.getElementById('inputText');
+                this.outputContent = document.getElementById('outputContent');
+                this.rephraseBtn = document.getElementById('rephraseBtn');
+                this.temperatureSlider = document.getElementById('temperature');
+                this.tempDisplay = document.getElementById('tempDisplay');
+                this.statusIndicator = document.getElementById('statusIndicator');
+                this.statusText = document.getElementById('statusText');
+                this.logsContainer = document.getElementById('logsContainer');
+                this.copyBtn = document.getElementById('copyBtn');
+                this.clearBtn = document.getElementById('clearBtn');
+                this.exportBtn = document.getElementById('exportBtn');
+            }
+
+            bindEvents() {
+                // Style selection
+                document.querySelectorAll('.style-button').forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        document.querySelectorAll('.style-button').forEach(b => b.classList.remove('active'));
+                        e.target.classList.add('active');
+                        this.currentStyle = e.target.dataset.style;
+                        this.log(`Style changed to: ${this.currentStyle}`);
+                    });
+                });
+
+                // Temperature slider
+                this.temperatureSlider.addEventListener('input', (e) => {
+                    this.temperature = parseFloat(e.target.value);
+                    this.tempDisplay.textContent = this.temperature;
+                });
+
+                // Main rephrase button
+                this.rephraseBtn.addEventListener('click', () => this.rephraseText());
+
+                // Control buttons
+                this.copyBtn.addEventListener('click', () => this.copyOutput());
+                this.clearBtn.addEventListener('click', () => this.clearOutput());
+                this.exportBtn.addEventListener('click', () => this.exportLogs());
+
+                // Enter key support
+                this.inputText.addEventListener('keydown', (e) => {
+                    if (e.ctrlKey && e.key === 'Enter') {
+                        this.rephraseText();
+                    }
+                });
+            }
+
+            async checkOllamaConnection() {
+                try {
+                    const response = await fetch('http://localhost:11434/api/tags');
+                    if (response.ok) {
+                        this.isConnected = true;
+                        this.statusIndicator.className = 'status-indicator status-connected';
+                        this.statusText.textContent = 'Connected to Ollama (llama3.2:3b)';
+                        this.log('Successfully connected to Ollama server');
+                    } else {
+                        throw new Error('Ollama not responding');
+                    }
+                } catch (error) {
+                    this.isConnected = false;
+                    this.statusIndicator.className = 'status-indicator status-disconnected';
+                    this.statusText.textContent = 'Ollama not connected';
+                    this.log(`Connection failed: ${error.message}`, 'error');
+                }
+            }
+
+            getStylePrompt(style) {
+                const prompts = {
+                    professional: "Rewrite this text in a professional, business-appropriate tone. Use formal language, clear structure, and maintain a respectful, competent voice.",
+                    casual: "Rewrite this text in a casual, friendly tone. Use conversational language, contractions, and a relaxed style as if talking to a friend.",
+                    academic: "Rewrite this text in an academic style. Use formal language, precise terminology, and structure it like scholarly writing with clear arguments.",
+                    creative: "Rewrite this text in a creative, engaging style. Use vivid language, metaphors, and make it more interesting and expressive.",
+                    concise: "Rewrite this text to be more concise and direct. Remove unnecessary words while keeping the core message clear and impactful.",
+                    humorous: "Rewrite this text with humor and wit. Add appropriate jokes, wordplay, or amusing comparisons while keeping the main message."
+                };
+                return prompts[style] || prompts.professional;
+            }
+
+            async rephraseText() {
+                const text = this.inputText.value.trim();
+                
+                if (!text) {
+                    alert('Please enter some text to rephrase!');
+                    return;
+                }
+
+                if (!this.isConnected) {
+                    alert('Please make sure Ollama is running and try again!');
+                    return;
+                }
+
+                this.setLoading(true);
+                this.log(`Starting rephrasing: ${this.currentStyle} style, temperature: ${this.temperature}`);
+
+                try {
+                    const prompt = `${this.getStylePrompt(this.currentStyle)}
+
+Original text: "${text}"
+
+Rewritten text:`;
+
+                    const response = await fetch('http://localhost:11434/api/generate', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            model: 'llama3.2:3b',
+                            prompt: prompt,
+                            stream: false,
+                            options: {
+                                temperature: this.temperature,
+                                top_p: 0.9,
+                                top_k: 40,
+                                repeat_penalty: 1.1,
+                                num_predict: 500,
+                                stop: ['\n\nOriginal text:', 'Rewritten text:', '\n---']
+                            }
+                        })
+                    });
+
+                    if (!response.ok) {
+                        throw new Error(`API Error: ${response.status}`);
+                    }
+
+                    const result = await response.json();
+                    const rephrasedText = result.response.trim();
+                    
+                    this.displayOutput(rephrasedText);
+                    this.log(`Successfully rephrased ${text.length} characters -> ${rephrasedText.length} characters`);
+                    
+                } catch (error) {
+                    this.log(`Error during rephrasing: ${error.message}`, 'error');
+                    this.displayOutput(`Error: ${error.message}`, true);
+                } finally {
+                    this.setLoading(false);
+                }
+            }
+
+            setLoading(isLoading) {
+                if (isLoading) {
+                    this.rephraseBtn.disabled = true;
+                    this.rephraseBtn.innerHTML = '<div class="spinner"></div> Processing...';
+                    this.outputContent.innerHTML = `
+                        <div class="loading">
+                            <div class="spinner"></div>
+                            <span>AI is rephrasing your text...</span>
+                        </div>
+                    `;
+                } else {
+                    this.rephraseBtn.disabled = false;
+                    this.rephraseBtn.innerHTML = '🚀 Rephrase Text';
+                }
+            }
+
+            displayOutput(text, isError = false) {
+                this.outputContent.innerHTML = text;
+                this.outputContent.classList.add('has-content');
+                
+                if (isError) {
+                    this.outputContent.style.borderColor = '#e74c3c';
+                    this.outputContent.style.color = '#e74c3c';
+                } else {
+                    this.outputContent.style.borderColor = '#27ae60';
+                    this.outputContent.style.color = '#2c3e50';
+                    this.copyBtn.style.display = 'inline-block';
+                    this.exportBtn.style.display = 'inline-block';
+                }
+            }
+
+            copyOutput() {
+                const text = this.outputContent.textContent;
+                navigator.clipboard.writeText(text).then(() => {
+                    this.log('Output copied to clipboard');
+                    this.copyBtn.textContent = '✅ Copied!';
+                    setTimeout(() => {
+                        this.copyBtn.textContent = '📋 Copy';
+                    }, 2000);
+                });
+            }
+
+            clearOutput() {
+                this.outputContent.innerHTML = `
+                    <div style="text-align: center; padding: 40px; color: #7f8c8d;">
+                        Your rephrased text will appear here...
+                    </div>
+                `;
+                this.outputContent.classList.remove('has-content');
+                this.copyBtn.style.display = 'none';
+                this.exportBtn.style.display = 'none';
+                this.log('Output cleared');
+            }
+
+            log(message, type = 'info') {
+                const timestamp = new Date().toLocaleTimeString();
+                const logEntry = {
+                    timestamp,
+                    message,
+                    type
+                };
+                
+                this.logs.push(logEntry);
+                this.saveLogs();
+                
+                const logDiv = document.createElement('div');
+                logDiv.className = 'log-entry';
+                logDiv.innerHTML = `
+                    <span class="log-timestamp">[${timestamp}]</span> ${message}
+                `;
+                
+                this.logsContainer.appendChild(logDiv);
+                this.logsContainer.scrollTop = this.logsContainer.scrollHeight;
+                
+                // Keep only last 50 log entries in UI
+                if (this.logsContainer.children.length > 50) {
+                    this.logsContainer.removeChild(this.logsContainer.firstChild);
+                }
+            }
+
+            saveLogs() {
+                try {
+                    const logsData = JSON.stringify(this.logs, null, 2);
+                    // In a real app, you'd save to a file or database
+                    // For demo purposes, we'll use localStorage
+                    localStorage.setItem('ai_rephraser_logs', logsData);
+                } catch (error) {
+                    console.error('Failed to save logs:', error);
+                }
+            }
+
+            loadLogs() {
+                try {
+                    const savedLogs = localStorage.getItem('ai_rephraser_logs');
+                    if (savedLogs) {
+                        this.logs = JSON.parse(savedLogs);
+                        // Display last 10 logs
+                        this.logs.slice(-10).forEach(log => {
+                            const logDiv = document.createElement('div');
+                            logDiv.className = 'log-entry';
+                            logDiv.innerHTML = `
+                                <span class="log-timestamp">[${log.timestamp}]</span> ${log.message}
+                            `;
+                            this.logsContainer.appendChild(logDiv);
+                        });
+                    }
+                } catch (error) {
+                    console.error('Failed to load logs:', error);
+                }
+            }
+
+            exportLogs() {
+                const logsText = this.logs.map(log => 
+                    `[${log.timestamp}] ${log.message}`
+                ).join('\n');
+                
+                const blob = new Blob([logsText], { type: 'text/plain' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `ai_rephraser_logs_${new Date().toISOString().split('T')[0]}.txt`;
+                a.click();
+                URL.revokeObjectURL(url);
+                
+                this.log('Logs exported successfully');
+            }
+        }
+
+        // Initialize the application
+        document.addEventListener('DOMContentLoaded', () => {
+            new AIRephraser();
+        });
+    </script>
+</body>
+</html>
